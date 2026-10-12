@@ -84,7 +84,8 @@ export class YtDlpProvider extends BaseProvider {
         dumpSingleJson: true,
         noWarnings: true,
         noCheckCertificate: true,
-        preferFreeFormats: true
+        preferFreeFormats: true,
+        extractorArgs: "generic:impersonate"
       });
 
       const output = await runWithTimeout(commandPromise, 25000, "Metadata extraction timed out. Please try again.");
@@ -215,7 +216,8 @@ export class YtDlpProvider extends BaseProvider {
         bufferSize: "16M",
         noWarnings: true,
         noCheckCertificate: true,
-        preferFreeFormats: true
+        preferFreeFormats: true,
+        extractorArgs: "generic:impersonate"
       });
 
       await runWithTimeout(commandPromise, 90000, "Download timed out. Please try again.");

@@ -1,8 +1,15 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #fafafa;
+  --foreground: #09090b;
+}
+
+.dark {
+  --background: #09090b;
+  --foreground: #fafafa;
 }
 
 @theme inline {
@@ -12,15 +19,167 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html {
+  -webkit-text-size-adjust: 100%;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  overflow-x: hidden;
+  max-width: 100vw;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  letter-spacing: -0.02em;
+  font-feature-settings: "cv02" 1, "cv03" 1, "cv04" 1, "cv11" 1;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
+  max-width: 100vw;
+  transition: background-color 0.25s ease, color 0.25s ease;
+}
+
+::selection {
+  background-color: #2563eb;
+  color: #ffffff;
+}
+
+code, kbd, samp, pre, .font-mono {
+  font-family: var(--font-mono), ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-feature-settings: "tnum" 1, "zero" 1;
+  letter-spacing: -0.01em;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  letter-spacing: -0.035em;
+}
+
+/* 
+ * ZERO-LAG, ZERO-STUTTER GPU COMPOSITED AMBIENT BACKGROUND
+ * 
+ * 1. Hardware-accelerated exclusively via translate3d on isolated compositor layer.
+ * 2. Continuous linear flow matching exact pattern repeat (32px x 32px) so the loop
+ *    boundary has zero jump, zero hitch, zero hesitation.
+ * 3. 0% CPU overhead, zero main-thread JS interaction, 60/120fps native performance.
+ * 4. Fully disabled if user requests reduced motion.
+ */
+@keyframes ambient-stream-flow {
+  0% {
+    transform: translate3d(0, 0, 0);
+  }
+  100% {
+    transform: translate3d(-32px, -32px, 0);
+  }
+}
+
+@keyframes ambient-glow-breathe {
+  0%, 100% {
+    transform: translate3d(0, 0, 0) scale(1);
+    opacity: 0.45;
+  }
+  50% {
+    transform: translate3d(24px, -18px, 0) scale(1.08);
+    opacity: 0.75;
+  }
+}
+
+.ambient-background-container {
+  position: fixed;
+  inset: -64px;
+  width: calc(100% + 128px);
+  height: calc(100% + 128px);
+  pointer-events: none;
+  z-index: 0;
+  contain: strict;
+  overflow: hidden;
+}
+
+.ambient-grid-canvas {
+  position: absolute;
+  inset: -64px;
+  width: calc(100% + 128px);
+  height: calc(100% + 128px);
+  pointer-events: none;
+  will-change: transform;
+  transform: translate3d(0, 0, 0);
+  backface-visibility: hidden;
+  transform-style: preserve-3d;
+  animation: ambient-stream-flow 22s linear infinite;
+}
+
+.bg-dot-grid {
+  background-image: radial-gradient(rgba(15, 23, 42, 0.08) 1.25px, transparent 1.25px);
+  background-size: 32px 32px;
+}
+
+.dark .bg-dot-grid {
+  background-image: radial-gradient(rgba(248, 250, 252, 0.09) 1.25px, transparent 1.25px);
+}
+
+.ambient-glow-layer {
+  position: absolute;
+  top: -10%;
+  left: 20%;
+  width: 60vw;
+  height: 50vh;
+  border-radius: 9999px;
+  background: radial-gradient(circle, rgba(59, 130, 246, 0.07) 0%, transparent 70%);
+  pointer-events: none;
+  will-change: transform, opacity;
+  transform: translate3d(0, 0, 0);
+  backface-visibility: hidden;
+  animation: ambient-glow-breathe 16s ease-in-out infinite;
+}
+
+.dark .ambient-glow-layer {
+  background: radial-gradient(circle, rgba(59, 130, 246, 0.12) 0%, transparent 70%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ambient-grid-canvas,
+  .ambient-glow-layer {
+    animation: none !important;
+  }
+}
+
+/* Studio VU-meter equalizer animation */
+@keyframes vu-bounce {
+  0%, 100% {
+    height: 4px;
+    opacity: 0.6;
+  }
+  50% {
+    height: 18px;
+    opacity: 1;
+  }
+}
+
+.vu-bar-1 { animation: vu-bounce 0.75s ease-in-out infinite; }
+.vu-bar-2 { animation: vu-bounce 1.05s ease-in-out infinite 0.15s; }
+.vu-bar-3 { animation: vu-bounce 0.65s ease-in-out infinite 0.35s; }
+.vu-bar-4 { animation: vu-bounce 0.9s ease-in-out infinite 0.05s; }
+.vu-bar-5 { animation: vu-bounce 1.2s ease-in-out infinite 0.25s; }
+
+/* Custom smooth scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #d4d4d8;
+  border-radius: 9999px;
+}
+.dark ::-webkit-scrollbar-thumb {
+  background: #27272a;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #a1a1aa;
+}
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: #3f3f46;
 }

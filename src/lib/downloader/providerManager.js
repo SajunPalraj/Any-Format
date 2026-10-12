@@ -1,13 +1,15 @@
 import { detectPlatform, validateUrlSecurity, normalizeMediaUrl } from "./siteDetector.js";
 import { YtDlpProvider } from "./providers/ytdlpProvider.js";
 import { NativeFallbackProvider } from "./providers/nativeFallbackProvider.js";
+import { UniversalSnifferProvider } from "./providers/universalSnifferProvider.js";
 import { classifyDownloaderError } from "./errorClassifier.js";
 
 export class ProviderManager {
   constructor() {
     this.providers = [
       new YtDlpProvider(),
-      new NativeFallbackProvider()
+      new NativeFallbackProvider(),
+      new UniversalSnifferProvider()
     ];
   }
 

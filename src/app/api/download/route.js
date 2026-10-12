@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { universalDownloader } from "@/lib/downloader/universalMediaDownloader";
 
+// Route updated to reload provider manager with impersonate and universal sniffer
+
 export async function GET(request) {
   try {
     const { searchParams } = new URL(request.url);
