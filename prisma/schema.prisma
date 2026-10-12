@@ -1,0 +1,51 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id             String          @id @default(uuid())
+  email          String          @unique
+  name           String?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  jobs           ConversionJob[]
+  subscriptions  Subscription[]
+  usages         Usage[]
+}
+
+model ConversionJob {
+  id           String   @id @default(uuid())
+  userId       String
+  type         String   // e.g., 'image-to-webp', 'video-compress'
+  status       String   // e.g., 'pending', 'processing', 'completed', 'failed'
+  inputFileUrl String?
+  outputFileUrl String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  user         User     @relation(fields: [userId], references: [id])
+}
+
+model Subscription {
+  id        String   @id @default(uuid())
+  userId    String
+  plan      String   // e.g., 'free', 'pro'
+  status    String   // e.g., 'active', 'canceled'
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id])
+}
+
+model Usage {
+  id          String   @id @default(uuid())
+  userId      String
+  bytesUsed   BigInt
+  jobsCount   Int
+  periodStart DateTime
+  periodEnd   DateTime
+  user        User     @relation(fields: [userId], references: [id])
+}
