@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useCallback, Suspense } from "react";
+import { useState, useEffect, useCallback, useRef, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { getToolById } from "@/lib/tools/registry";
 import ToolOptions from "@/components/ToolOptions";
@@ -70,6 +70,7 @@ function UrlDownloaderContent() {
   const [copiedLink, setCopiedLink] = useState(false);
   const [showRawJson, setShowRawJson] = useState(false);
   const [sessionHistory, setSessionHistory] = useState([]);
+  const conversionAbortRef = useRef(null);
 
   const livePlatform = urlInput ? detectPlatform(urlInput) : null;
 
@@ -129,7 +130,14 @@ function UrlDownloaderContent() {
               quality: defaultOpt.quality,
               videoFormatId: defaultOpt.videoFormatId,
               audioFormatId: defaultOpt.audioFormatId,
-              format: defaultOpt.extension || "mp4"
+              format: defaultOpt.extension || "mp4",
+              streamUrl: defaultOpt.streamUrl || defaultOpt.url || data.primaryStreamUrl || null
+            }));
+          } else {
+            setOptions((prev) => ({
+              ...prev,
+              jobId: data.jobId,
+              streamUrl: data.primaryStreamUrl || null
             }));
           }
           setIsAnalyzing(false);
@@ -167,11 +175,23 @@ function UrlDownloaderContent() {
     }
   }, [searchParams, analyzedMedia, isAnalyzing, handleAnalyzeUrl]);
 
+  const handleCancelConversion = () => {
+    if (conversionAbortRef.current) {
+      conversionAbortRef.current.abort(new Error("Processing was cancelled by user."));
+      conversionAbortRef.current = null;
+    }
+    setStatus("idle");
+    setErrorMsg("Media processing was cancelled.");
+  };
+
   const handleStartConversion = async () => {
     if (!urlInput) {
       setErrorMsg("Please enter a media URL to process.");
       return;
     }
+
+    const abortController = new AbortController();
+    conversionAbortRef.current = abortController;
 
     setStatus("processing");
     setProcessingStep(1);
@@ -182,7 +202,7 @@ function UrlDownloaderContent() {
     }, 1200);
 
     try {
-      const urlRes = await processUrlMedia(urlInput, options);
+      const urlRes = await processUrlMedia(urlInput, options, abortController.signal);
       clearInterval(stepInterval);
 
       const activeExt = (urlRes.ext || options.format || "mp4").toLowerCase();
@@ -229,6 +249,8 @@ function UrlDownloaderContent() {
       console.warn("URL Downloader Error:", err.message);
       setErrorMsg(err.message || "An unexpected error occurred during URL processing.");
       setStatus("idle");
+    } finally {
+      conversionAbortRef.current = null;
     }
   };
 
@@ -595,6 +617,17 @@ function UrlDownloaderContent() {
                 </span>
                 <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400">Ready</span>
               </div>
+            </div>
+
+            <div className="mt-4 flex items-center justify-center">
+              <button
+                type="button"
+                onClick={handleCancelConversion}
+                className="px-4 py-2 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 hover:bg-zinc-50 dark:hover:bg-zinc-800 text-xs font-mono text-zinc-700 dark:text-zinc-300 transition-colors cursor-pointer shadow-xs flex items-center gap-1.5"
+              >
+                <X className="w-3.5 h-3.5 text-zinc-500" />
+                <span>Cancel Processing</span>
+              </button>
             </div>
           </div>
         )}

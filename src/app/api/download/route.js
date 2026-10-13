@@ -3,6 +3,9 @@ import { universalDownloader } from "@/lib/downloader/universalMediaDownloader";
 
 // Route updated to reload provider manager with impersonate and universal sniffer
 
+export const maxDuration = 60;
+export const dynamic = "force-dynamic";
+
 export async function GET(request) {
   try {
     const { searchParams } = new URL(request.url);
@@ -10,6 +13,7 @@ export async function GET(request) {
     const isAnalyze = searchParams.get("analyze") === "true";
     const format = searchParams.get("format") || "mp4";
     const jobId = searchParams.get("jobId");
+    const streamUrl = searchParams.get("streamUrl");
 
     // UNIVERSAL MEDIA DOWNLOADER PIPELINE
     if (urlParam) {
@@ -32,7 +36,8 @@ export async function GET(request) {
             audioFormats: analysis.audioFormats || [],
             hasVideo: analysis.hasVideo,
             hasAudio: analysis.hasAudio,
-            provider: analysis.provider
+            provider: analysis.provider,
+            primaryStreamUrl: analysis.primaryStreamUrl || null
           });
         }
 
@@ -69,7 +74,8 @@ export async function GET(request) {
           quality: selectedQuality,
           qualityMode,
           videoFormatId,
-          audioFormatId
+          audioFormatId,
+          streamUrl
         });
 
         if (job && job.status === "COMPLETED") {

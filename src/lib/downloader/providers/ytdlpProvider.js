@@ -21,14 +21,35 @@ function getFfmpegExecutable() {
 }
 
 let ytdlpVersionLogged = false;
+let ytdlpTested = false;
+let ytdlpFunctional = false;
+
+async function isYtdlpFunctional() {
+  if (process.env.VERCEL === "1" || process.env.NOW_BUILDER) {
+    return false;
+  }
+  if (ytdlpTested) return ytdlpFunctional;
+  ytdlpTested = true;
+  try {
+    const runner = getExec();
+    const probePromise = runner("--version");
+    await runWithTimeout(probePromise, 1500, "probe");
+    ytdlpFunctional = true;
+  } catch (_) {
+    ytdlpFunctional = false;
+  }
+  return ytdlpFunctional;
+}
 
 async function logYtdlpVersionOnce() {
   if (ytdlpVersionLogged) return;
   ytdlpVersionLogged = true;
   try {
-    const runner = getExec();
-    const ver = await runner("--version");
-    console.log(`[URL-DOWNLOADER STARTUP] Active yt-dlp binary version: ${typeof ver === "string" ? ver.trim() : ver}`);
+    if (await isYtdlpFunctional()) {
+      const runner = getExec();
+      const ver = await runner("--version");
+      console.log(`[URL-DOWNLOADER STARTUP] Active yt-dlp binary version: ${typeof ver === "string" ? ver.trim() : ver}`);
+    }
   } catch (err) {
     console.warn(`[URL-DOWNLOADER STARTUP] Could not query yt-dlp version:`, err.message);
   }
@@ -77,6 +98,10 @@ export class YtDlpProvider extends BaseProvider {
   }
 
   async analyze(url, platform) {
+    if (!(await isYtdlpFunctional())) {
+      throw new Error("yt-dlp is not available in this environment; falling back to native extractor.");
+    }
+
     const targetUrl = prepareYtDlpUrl(url);
     try {
       const runner = getExec();
@@ -88,7 +113,7 @@ export class YtDlpProvider extends BaseProvider {
         extractorArgs: "generic:impersonate"
       });
 
-      const output = await runWithTimeout(commandPromise, 25000, "Metadata extraction timed out. Please try again.");
+      const output = await runWithTimeout(commandPromise, 15000, "Metadata extraction timed out. Please try again.");
 
       if (!output) {
         throw new Error("yt-dlp returned empty extraction output.");
@@ -183,6 +208,10 @@ export class YtDlpProvider extends BaseProvider {
   }
 
   async download(url, selectedOptions = {}, outputPath) {
+    if (!(await isYtdlpFunctional())) {
+      throw new Error("yt-dlp is not available in this environment; falling back to native extractor.");
+    }
+
     let formatArg = "bestvideo+bestaudio/best";
 
     const { videoFormatId, audioFormatId, targetHeight, exactHeight, outputFormat } = selectedOptions;
@@ -220,7 +249,7 @@ export class YtDlpProvider extends BaseProvider {
         extractorArgs: "generic:impersonate"
       });
 
-      await runWithTimeout(commandPromise, 90000, "Download timed out. Please try again.");
+      await runWithTimeout(commandPromise, 35000, "Download timed out. Please try again.");
 
       if (fs.existsSync(outputPath) && fs.statSync(outputPath).size > 0) {
         return outputPath;

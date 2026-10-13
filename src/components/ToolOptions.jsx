@@ -152,6 +152,9 @@ export default function ToolOptions({ tool, options, setOptions, analyzedMedia }
                       updateOption("selectedQuality", opt.quality || opt.id);
                       updateOption("videoFormatId", opt.videoFormatId);
                       updateOption("audioFormatId", opt.audioFormatId);
+                      if (opt.streamUrl || opt.url) {
+                        updateOption("streamUrl", opt.streamUrl || opt.url);
+                      }
                     }}
                     className={`p-3 rounded-lg border text-left transition-all flex flex-col justify-between cursor-pointer group ${
                       isSelected

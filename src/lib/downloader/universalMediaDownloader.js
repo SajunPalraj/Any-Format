@@ -192,6 +192,53 @@ export class UniversalMediaDownloader {
       cachedAnalysis = JobManager.findAnalysisByUrl(cleanUrl);
     }
 
+    // Serverless optimization: If cached analysis was lost due to cross-instance execution on Vercel/serverless,
+    // but the client provided the direct streamUrl from the analysis step, synthesize a lightweight cachedAnalysis
+    // so we avoid costly and timeout-prone re-analysis!
+    if (!cachedAnalysis && options.streamUrl) {
+      const targetFormat = (options.format || "mp4").toLowerCase();
+      const isAudioOnly = ["mp3", "m4a", "wav", "aac", "flac"].includes(targetFormat);
+      const parsedHeight = parseInt(options.selectedQuality || options.quality, 10) || 720;
+
+      const synthesizedFormat = {
+        formatId: options.videoFormatId || "best",
+        streamUrl: options.streamUrl,
+        url: options.streamUrl,
+        rawUrls: { videoUrl: options.streamUrl },
+        extension: targetFormat,
+        hasVideo: !isAudioOnly,
+        hasAudio: true,
+        height: parsedHeight,
+        width: Math.round(parsedHeight * (16 / 9))
+      };
+
+      cachedAnalysis = {
+        supported: true,
+        platformKey: "generic",
+        platform: "Web Media",
+        title: options.title || "Extracted Media Stream",
+        thumbnail: options.thumbnail || null,
+        duration: options.duration || "00:00",
+        primaryStreamUrl: options.streamUrl,
+        streamUrl: options.streamUrl,
+        rawUrls: { videoUrl: options.streamUrl },
+        formats: [synthesizedFormat],
+        audioFormats: isAudioOnly ? [synthesizedFormat] : [],
+        qualityOptions: [
+          {
+            id: options.quality || "best",
+            quality: options.quality || "best",
+            label: `Best Available (${parsedHeight}p)`,
+            height: parsedHeight,
+            videoFormatId: synthesizedFormat.formatId,
+            audioFormatId: "best",
+            streamUrl: options.streamUrl
+          }
+        ],
+        provider: "NativeFallbackProvider"
+      };
+    }
+
     if (!cachedAnalysis) {
       const freshAnalysis = await this.analyze(cleanUrl);
       if (!freshAnalysis.supported) {
