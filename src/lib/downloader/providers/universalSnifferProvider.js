@@ -383,15 +383,19 @@ export class UniversalSnifferProvider extends BaseProvider {
 
       const fileStream = fs.createWriteStream(outputPath);
 
+      const isGoogleVideo = streamUrl.includes("googlevideo.com");
+      const userAgent = isGoogleVideo
+        ? "com.google.android.apps.youtube.vr/1.56.21 (Linux; U; Android 10)"
+        : "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
+
       const req = client.get(
         streamUrl,
         {
           headers: {
-            "User-Agent":
-              "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+            "User-Agent": userAgent,
             Referer: url
           },
-          timeout: 60000
+          timeout: 30000
         },
         (res) => {
           if (

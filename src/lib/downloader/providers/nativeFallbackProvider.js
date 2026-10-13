@@ -3,6 +3,7 @@ import path from "path";
 import https from "https";
 import http from "http";
 import { BaseProvider } from "./baseProvider.js";
+import { mergeVideoAudio } from "../ffmpegProcessor.js";
 
 function isDirectMediaUrl(u) {
   if (!u || typeof u !== "string") return false;
@@ -169,16 +170,48 @@ export class NativeFallbackProvider extends BaseProvider {
     throw new Error(`This URL is currently unsupported or requires private access permissions.`);
   }
 
-  async download(url, selectedFormat, outputPath) {
-    const directUrl = selectedFormat.url ||
+  async download(url, selectedFormat = {}, outputPath) {
+    const videoUrl =
+      selectedFormat.url ||
       selectedFormat.streamUrl ||
-      (selectedFormat.rawUrls && (selectedFormat.rawUrls.videoUrl || selectedFormat.rawUrls.audioUrl));
+      selectedFormat.format?.url ||
+      selectedFormat.format?.streamUrl ||
+      (selectedFormat.rawUrls && selectedFormat.rawUrls.videoUrl);
 
-    if (!directUrl || (directUrl === url && !isDirectMediaUrl(directUrl))) {
+    const audioUrl =
+      selectedFormat.audioFormat?.url ||
+      selectedFormat.audioFormat?.streamUrl ||
+      (selectedFormat.rawUrls && selectedFormat.rawUrls.audioUrl);
+
+    if (!videoUrl && !audioUrl) {
       throw new Error("No direct stream URL available for native download.");
     }
 
-    await this.fetchStreamToFile(directUrl, outputPath);
+    // If video has no audio, but audio stream exists, download both and remux with mergeVideoAudio
+    const needsAudioMux =
+      selectedFormat.format &&
+      !selectedFormat.format.hasAudio &&
+      audioUrl &&
+      audioUrl !== videoUrl;
+
+    if (needsAudioMux) {
+      const tempVideo = outputPath + ".v.tmp";
+      const tempAudio = outputPath + ".a.tmp";
+      try {
+        await Promise.all([
+          this.fetchStreamToFile(videoUrl, tempVideo),
+          this.fetchStreamToFile(audioUrl, tempAudio)
+        ]);
+        await mergeVideoAudio(tempVideo, tempAudio, outputPath);
+        return outputPath;
+      } finally {
+        if (fs.existsSync(tempVideo)) try { fs.unlinkSync(tempVideo); } catch (_) {}
+        if (fs.existsSync(tempAudio)) try { fs.unlinkSync(tempAudio); } catch (_) {}
+      }
+    }
+
+    const targetUrl = videoUrl || audioUrl;
+    await this.fetchStreamToFile(targetUrl, outputPath);
     return outputPath;
   }
 
@@ -509,9 +542,14 @@ export class NativeFallbackProvider extends BaseProvider {
   fetchStreamToFile(fileUrl, outputPath) {
     return new Promise((resolve, reject) => {
       const client = fileUrl.startsWith("https") ? https : http;
+      const isGoogleVideo = fileUrl.includes("googlevideo.com");
+      const userAgent = isGoogleVideo
+        ? "com.google.android.apps.youtube.vr/1.56.21 (Linux; U; Android 10)"
+        : "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
+
       const request = client.get(fileUrl, {
         headers: {
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+          "User-Agent": userAgent
         }
       }, (response) => {
         if (response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {

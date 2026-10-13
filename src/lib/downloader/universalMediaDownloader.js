@@ -78,30 +78,40 @@ export class UniversalMediaDownloader {
       const qualityOptions = [];
 
       // 1. Add "Best Available" Option
-      const topVideo = videoFormats.find(f => f.height === maxSourceHeight) || videoFormats[0] || {};
-      const topWidth = topVideo.width || Math.round(maxSourceHeight * (16 / 9));
+      // Prioritize fast, reliable streams (prefer formats with both video and audio <= 1080p)
+      const hdCandidates = videoFormats.filter(f => (f.height || 0) <= 1080);
+      const progressiveHD = hdCandidates.find(f => f.hasVideo && f.hasAudio) || hdCandidates[0];
+      const topVideo = progressiveHD || videoFormats.find(f => f.height === maxSourceHeight) || videoFormats[0] || {};
+      const topHeight = topVideo.height || Math.min(maxSourceHeight, 1080);
+      const topWidth = topVideo.width || Math.round(topHeight * (16 / 9));
       const topEstSize = estimateFormatSize(topVideo, bestAudio);
 
       qualityOptions.push({
         id: "best",
         quality: "best",
-        label: `Best Available (${maxSourceHeight}p)`,
-        height: maxSourceHeight,
+        label: `Best Available (${topHeight}p)`,
+        height: topHeight,
         width: topWidth,
-        resolution: `${topWidth}x${maxSourceHeight}`,
+        resolution: `${topWidth}x${topHeight}`,
         fps: topVideo.fps || 30,
         videoFormatId: topVideo.formatId || "best",
         audioFormatId: bestAudio ? bestAudio.formatId : "best",
         extension: topVideo.extension || "mp4",
         filesize: topEstSize,
         hasVideo: true,
-        hasAudio: true
+        hasAudio: true,
+        streamUrl: topVideo.url || topVideo.streamUrl
       });
 
       // 2. Add Standard Resolution Options (1080p, 720p, 480p, 360p, 240p, 144p)
       for (const h of heights) {
         const matchingFormats = videoFormats.filter(f => Math.abs((f.height || 0) - h) <= 30);
-        const fmt = matchingFormats.find(f => f.extension === "mp4") || matchingFormats[0];
+        // Prefer progressive formats (both video and audio) for instant downloading
+        const fmt =
+          matchingFormats.find(f => f.hasVideo && f.hasAudio && f.extension === "mp4") ||
+          matchingFormats.find(f => f.hasVideo && f.hasAudio) ||
+          matchingFormats.find(f => f.extension === "mp4") ||
+          matchingFormats[0];
 
         const width = fmt && fmt.width ? fmt.width : Math.round(h * (16 / 9));
         const estSize = estimateFormatSize(fmt, bestAudio);
@@ -129,7 +139,8 @@ export class UniversalMediaDownloader {
           audioCodec: bestAudio ? bestAudio.audioCodec : null,
           filesize: estSize,
           hasVideo: true,
-          hasAudio: true
+          hasAudio: true,
+          streamUrl: fmt ? (fmt.url || fmt.streamUrl) : null
         });
       }
 
@@ -270,9 +281,7 @@ export class UniversalMediaDownloader {
         if (matchingFormat) {
           selectedVideoFormatId = matchingFormat.formatId;
         } else {
-          // Source doesn't have a separate stream for targetHeight (e.g. 480p on Facebook)
-          // We will download best available stream and downscale with FFmpeg to targetHeight
-          requiresDownscale = true;
+          // Pick closest/best available stream without CPU downscaling to avoid serverless timeouts
           const bestOpt = cachedAnalysis.qualityOptions.find(q => q.id === "best") || cachedAnalysis.qualityOptions[0];
           selectedVideoFormatId = bestOpt ? bestOpt.videoFormatId : "best";
         }
@@ -357,10 +366,8 @@ export class UniversalMediaDownloader {
 
       JobManager.updateJob(job.id, { status: "PROCESSING" });
 
-      // 5. Downscale / Container Conversion / Transcoding with FFmpeg
-      if (!isAudioOnly && targetHeight && requiresDownscale) {
-        await scaleVideoResolution(downloadedPath, targetHeight, targetFormat, finalOutputPath);
-      } else if (downloadedPath !== finalOutputPath) {
+      // 5. Container Conversion / Remuxing / Instant Stream Copy
+      if (downloadedPath !== finalOutputPath) {
         const downloadedExt = path.extname(downloadedPath).replace(".", "").toLowerCase();
         if (downloadedExt === targetFormat.toLowerCase() || (targetFormat === "mp4" && (downloadedExt === "mp4" || downloadedExt === "m4v"))) {
           fs.copyFileSync(downloadedPath, finalOutputPath);

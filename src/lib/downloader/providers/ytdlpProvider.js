@@ -25,7 +25,15 @@ let ytdlpTested = false;
 let ytdlpFunctional = false;
 
 async function isYtdlpFunctional() {
-  if (process.env.VERCEL === "1" || process.env.NOW_BUILDER) {
+  if (
+    process.env.VERCEL ||
+    process.env.VERCEL_ENV ||
+    process.env.VERCEL_URL ||
+    process.env.AWS_LAMBDA_FUNCTION_NAME ||
+    process.env.AWS_REGION ||
+    process.env.LAMBDA_TASK_ROOT ||
+    process.env.NOW_BUILDER
+  ) {
     return false;
   }
   if (ytdlpTested) return ytdlpFunctional;

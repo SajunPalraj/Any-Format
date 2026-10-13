@@ -58,7 +58,7 @@ function UrlDownloaderContent() {
 
   const [options, setOptions] = useState(() => ({
     format: "mp4",
-    quality: "1080p",
+    quality: "best",
     formatId: null,
     audioBitrate: "320k"
   }));
