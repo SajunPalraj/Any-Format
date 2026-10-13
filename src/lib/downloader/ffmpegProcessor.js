@@ -126,6 +126,19 @@ export async function convertMediaContainer(inputPath, targetFormat, outputPath)
     let fallbackArgs = [];
     if (ext === "mp3" || ext === "m4a") {
       fallbackArgs = ["-y", "-threads", "0", "-i", inputPath, "-vn", outputPath];
+    } else if (ext === "webm") {
+      fallbackArgs = [
+        "-y",
+        "-threads", "0",
+        "-i", inputPath,
+        "-c:v", "libvpx-vp9",
+        "-crf", "35",
+        "-b:v", "0",
+        "-deadline", "realtime",
+        "-cpu-used", "8",
+        "-c:a", "libopus",
+        outputPath
+      ];
     } else {
       fallbackArgs = ["-y", "-threads", "0", "-i", inputPath, "-c:v", "libx264", "-preset", "ultrafast", "-c:a", "aac", "-movflags", "+faststart", outputPath];
     }

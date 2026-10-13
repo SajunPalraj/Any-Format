@@ -4,6 +4,16 @@ import https from "https";
 import http from "http";
 import { BaseProvider } from "./baseProvider.js";
 
+function isDirectMediaUrl(u) {
+  if (!u || typeof u !== "string") return false;
+  try {
+    const pathname = new URL(u).pathname.toLowerCase();
+    return /\.(mp4|m4v|webm|mkv|mov|avi|flv|wmv|mp3|m4a|wav|aac|ogg|opus|m3u8)(\?|$)/i.test(pathname);
+  } catch (_) {
+    return false;
+  }
+}
+
 export class NativeFallbackProvider extends BaseProvider {
   constructor() {
     super("native-fallback");
@@ -160,8 +170,11 @@ export class NativeFallbackProvider extends BaseProvider {
   }
 
   async download(url, selectedFormat, outputPath) {
-    const directUrl = selectedFormat.url || (selectedFormat.rawUrls && selectedFormat.rawUrls.videoUrl);
-    if (!directUrl) {
+    const directUrl = selectedFormat.url ||
+      selectedFormat.streamUrl ||
+      (selectedFormat.rawUrls && (selectedFormat.rawUrls.videoUrl || selectedFormat.rawUrls.audioUrl));
+
+    if (!directUrl || (directUrl === url && !isDirectMediaUrl(directUrl))) {
       throw new Error("No direct stream URL available for native download.");
     }
 
@@ -509,12 +522,19 @@ export class NativeFallbackProvider extends BaseProvider {
           return reject(new Error(`Failed to download stream: HTTP ${response.statusCode}`));
         }
 
+        const contentType = (response.headers["content-type"] || "").toLowerCase();
+        if (contentType.includes("text/html")) {
+          return reject(new Error("Stream URL returned an HTML page instead of a media file."));
+        }
+
         const fileStream = fs.createWriteStream(outputPath);
         response.pipe(fileStream);
 
         fileStream.on("finish", () => {
-          fileStream.close();
-          resolve(outputPath);
+          fileStream.close((closeErr) => {
+            if (closeErr) reject(closeErr);
+            else resolve(outputPath);
+          });
         });
 
         fileStream.on("error", (err) => {

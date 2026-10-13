@@ -24,6 +24,16 @@ function getFfmpegExecutable() {
   return defaultPath || "ffmpeg";
 }
 
+function isDirectMediaUrl(u) {
+  if (!u || typeof u !== "string") return false;
+  try {
+    const pathname = new URL(u).pathname.toLowerCase();
+    return /\.(mp4|m4v|webm|mkv|mov|avi|flv|wmv|mp3|m4a|wav|aac|ogg|opus|m3u8)(\?|$)/i.test(pathname);
+  } catch (_) {
+    return false;
+  }
+}
+
 /**
  * UniversalSnifferProvider
  * Deep-scans arbitrary web URLs for embedded HTML5 videos, OpenGraph media,
@@ -317,8 +327,25 @@ export class UniversalSnifferProvider extends BaseProvider {
 
   async download(url, selectedFormat, outputPath) {
     const cachedStream = this.streamCache.get(url);
-    const streamUrl =
-      selectedFormat?.streamUrl || cachedStream?.url || url;
+    let streamUrl =
+      selectedFormat?.streamUrl ||
+      selectedFormat?.url ||
+      cachedStream?.url;
+
+    // If streamUrl is missing or points to the webpage itself, attempt real stream extraction
+    if (!streamUrl || (streamUrl === url && !isDirectMediaUrl(streamUrl))) {
+      try {
+        const recheck = await this.analyze(url);
+        streamUrl =
+          recheck?.primaryStreamUrl ||
+          recheck?.formats?.[0]?.streamUrl ||
+          recheck?.formats?.[0]?.url;
+      } catch (_) {}
+    }
+
+    if (!streamUrl || (streamUrl === url && !isDirectMediaUrl(streamUrl))) {
+      throw new Error(`No direct media stream URL could be resolved for ${url}.`);
+    }
 
     const isHls =
       streamUrl.includes(".m3u8") ||
@@ -381,29 +408,50 @@ export class UniversalSnifferProvider extends BaseProvider {
 
           if (res.statusCode >= 400) {
             fileStream.close();
+            if (fs.existsSync(outputPath)) {
+              try { fs.unlinkSync(outputPath); } catch (_) {}
+            }
             return reject(
               new Error(`Failed to download stream, HTTP status ${res.statusCode}`)
+            );
+          }
+
+          const contentType = (res.headers["content-type"] || "").toLowerCase();
+          if (contentType.includes("text/html")) {
+            fileStream.close();
+            if (fs.existsSync(outputPath)) {
+              try { fs.unlinkSync(outputPath); } catch (_) {}
+            }
+            return reject(
+              new Error("Stream URL returned an HTML webpage instead of a media binary.")
             );
           }
 
           res.pipe(fileStream);
 
           fileStream.on("finish", () => {
-            fileStream.close(() => resolve(outputPath));
+            fileStream.close((closeErr) => {
+              if (closeErr) reject(closeErr);
+              else resolve(outputPath);
+            });
           });
         }
       );
 
       req.on("error", (err) => {
         fileStream.close();
-        if (fs.existsSync(outputPath)) fs.unlinkSync(outputPath);
+        if (fs.existsSync(outputPath)) {
+          try { fs.unlinkSync(outputPath); } catch (_) {}
+        }
         reject(err);
       });
 
       req.on("timeout", () => {
         req.destroy();
         fileStream.close();
-        if (fs.existsSync(outputPath)) fs.unlinkSync(outputPath);
+        if (fs.existsSync(outputPath)) {
+          try { fs.unlinkSync(outputPath); } catch (_) {}
+        }
         reject(new Error("Media stream download timed out"));
       });
     });

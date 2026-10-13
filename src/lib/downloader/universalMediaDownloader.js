@@ -238,6 +238,27 @@ export class UniversalMediaDownloader {
       targetHeight = cachedAnalysis.qualityOptions[0].height;
     }
 
+    // Resolve matching stream format objects from analysis
+    const matchingVideoFormat =
+      (cachedAnalysis.formats || []).find((f) => f.formatId === selectedVideoFormatId) ||
+      (cachedAnalysis.formats || []).find((f) => f.hasVideo || (f.height || 0) > 0) ||
+      (cachedAnalysis.formats || [])[0] ||
+      null;
+
+    const matchingAudioFormat =
+      (cachedAnalysis.audioFormats || []).find((f) => f.formatId === selectedAudioFormatId) ||
+      (cachedAnalysis.formats || []).find((f) => f.formatId === selectedAudioFormatId) ||
+      (cachedAnalysis.audioFormats || [])[0] ||
+      null;
+
+    const directStreamUrl =
+      matchingVideoFormat?.streamUrl ||
+      matchingVideoFormat?.url ||
+      matchingVideoFormat?.rawUrls?.videoUrl ||
+      cachedAnalysis.primaryStreamUrl ||
+      cachedAnalysis.rawUrls?.videoUrl ||
+      null;
+
     // 3. Create Job Record
     const job = JobManager.createJob(cleanUrl, {
       title: cachedAnalysis.title,
@@ -259,8 +280,33 @@ export class UniversalMediaDownloader {
         videoFormatId: selectedVideoFormatId,
         audioFormatId: selectedAudioFormatId,
         targetHeight,
-        outputFormat: targetFormat
+        outputFormat: targetFormat,
+        format: matchingVideoFormat,
+        audioFormat: matchingAudioFormat,
+        url: directStreamUrl,
+        streamUrl: directStreamUrl,
+        rawUrls: matchingVideoFormat?.rawUrls || cachedAnalysis.rawUrls || (directStreamUrl ? { videoUrl: directStreamUrl } : null),
+        isHls: matchingVideoFormat?.isHls || Boolean(directStreamUrl?.includes(".m3u8")),
+        formats: cachedAnalysis.formats
       }, rawOutputPath);
+
+      // Validate raw downloaded file before processing with FFmpeg
+      if (!fs.existsSync(downloadedPath) || fs.statSync(downloadedPath).size < 512) {
+        throw new Error("Downloaded raw media stream file is empty or missing.");
+      }
+
+      try {
+        const headerBuf = Buffer.alloc(256);
+        const fd = fs.openSync(downloadedPath, "r");
+        fs.readSync(fd, headerBuf, 0, 256, 0);
+        fs.closeSync(fd);
+        const headerStr = headerBuf.toString("utf8", 0, 256).toLowerCase();
+        if (headerStr.includes("<!doctype") || headerStr.includes("<html") || headerStr.includes("<head")) {
+          throw new Error("Stream extraction received an HTML webpage or anti-bot challenge instead of a media file.");
+        }
+      } catch (checkErr) {
+        if (checkErr.message.includes("HTML webpage")) throw checkErr;
+      }
 
       JobManager.updateJob(job.id, { status: "PROCESSING" });
 
